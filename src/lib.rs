@@ -7,37 +7,94 @@ use roman::RomanNumeral;
 #[derive(Debug)]
 pub struct NumericSystem {
     numerals: HashMap<String, RomanNumeral>,
-    credits: HashMap<String, f32>,
+    materials: HashMap<String, f32>,
 }
 
 impl NumericSystem {
+    pub fn new() -> Self {
+        Self {
+            numerals: HashMap::new(),
+            materials: HashMap::new(),
+        }
+    }
+
+    pub fn update(&mut self, line: &str) -> Result<(), String> {
+        let split_on = " is ";
+        let mut split = line.trim().split(split_on);
+
+        if let (Some(left), Some(right)) = (split.next(), split.next()) {
+            if right.len() == 1 {
+                self.numerals
+                    .insert(left.to_string(), right.parse::<RomanNumeral>()?);
+            } else {
+                let value: i32 = left
+                    .split(' ')
+                    .filter_map(|s| self.numerals.get(s))
+                    .cloned()
+                    .collect();
+
+                let material = match left.split(' ').last() {
+                    Some(m) => m,
+                    None => return Err("Empty left side".to_string()),
+                };
+
+                split = right.split(" ");
+
+                if let Some(creditamount) = split.next() {
+                    if let Ok(amount) = creditamount.parse::<i32>() {
+                        self.materials
+                            .insert(material.to_string(), amount as f32 / value as f32);
+                    }
+                }
+            }
+        } else {
+            return Err(format!(
+                "Invalid line \'{line}\', failed to split on \'{split_on}\'"
+            ));
+        }
+
+        Ok(())
+    }
+
     pub fn convert(&self, question: &str) -> Result<String, String> {
-        let val = match question.split(" is ").nth(1) {
+        let right = match question.split(" is ").nth(1) {
             Some(s) => s.replace(" ?", ""),
             None => return Err("I have no idea what you are talking about".to_string()),
         };
 
-        let amount: i32 = val
+        let amount: i32 = right
             .split(' ')
-            .filter_map(|s| self.numerals.get(s))
+            // Right side can contain a material which we do not want for computing the amount
+            .filter(|s| !self.materials.keys().any(|k| k == s))
+            // Map the strings to the desired Roman numerals
+            .map(|s| -> Result<&RomanNumeral, String> {
+                self.numerals
+                    .get(s)
+                    .ok_or(format!("Unknown intergalactic numeral {s}"))
+            })
+            .collect::<Result<Vec<&RomanNumeral>, String>>()?
+            // Collect into a i32 via impl From<Iterator<Item = RomanNumeral>> for i32
+            .into_iter()
             .cloned()
             .collect();
 
-        let last = val.split(' ').last().unwrap_or_default();
-
-        let material: Option<&str> = if self.credits.keys().any(|k| k == last) {
+        // The last segment might be a material
+        let last = right.split(' ').last().unwrap_or_default();
+        let material: Option<&str> = if self.materials.keys().any(|k| k == last) {
             Some(last)
         } else {
             None
         };
 
+        // The material determines a factor when available
         let factor = self
-            .credits
+            .materials
             .get(material.unwrap_or_default())
             .unwrap_or(&1.0);
 
+        // Format the result string
         Ok(format!(
-            "{val} is {}{}",
+            "{right} is {}{}",
             amount as f32 * factor,
             if material.is_some() { " Credits" } else { "" }
         ))
@@ -50,46 +107,11 @@ impl FromStr for NumericSystem {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut result = Self {
             numerals: HashMap::new(),
-            credits: HashMap::new(),
+            materials: HashMap::new(),
         };
 
-        let split_on = " is ";
-
         for line in s.lines() {
-            let mut split = line.trim().split(split_on);
-
-            if let (Some(left), Some(right)) = (split.next(), split.next()) {
-                if right.len() == 1 {
-                    result
-                        .numerals
-                        .insert(left.to_string(), right.parse::<RomanNumeral>()?);
-                } else {
-                    let value: i32 = left
-                        .split(' ')
-                        .filter_map(|s| result.numerals.get(s))
-                        .cloned()
-                        .collect();
-
-                    let material = match left.split(' ').last() {
-                        Some(m) => m,
-                        None => return Err("Empty left side".to_string()),
-                    };
-
-                    split = right.split(" ");
-
-                    if let Some(creditamount) = split.next() {
-                        if let Ok(amount) = creditamount.parse::<i32>() {
-                            result
-                                .credits
-                                .insert(material.to_string(), amount as f32 / value as f32);
-                        }
-                    }
-                }
-            } else {
-                return Err(format!(
-                    "Invalid line \'{line}\', failed to split on \'{split_on}\'"
-                ));
-            }
+            result.update(line)?;
         }
 
         Ok(result)
