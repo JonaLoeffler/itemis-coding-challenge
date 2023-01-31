@@ -2,7 +2,7 @@ mod roman;
 
 use std::{collections::HashMap, str::FromStr};
 
-use roman::RomanNumeral;
+use roman::{RomanNumber, RomanNumeral};
 
 #[derive(Debug)]
 pub struct NumericSystem {
@@ -27,11 +27,14 @@ impl NumericSystem {
                 self.numerals
                     .insert(left.to_string(), right.parse::<RomanNumeral>()?);
             } else {
-                let value: i32 = left
+                let number: RomanNumber = left
                     .split(' ')
                     .filter_map(|s| self.numerals.get(s))
                     .cloned()
-                    .collect();
+                    .collect::<Vec<RomanNumeral>>()
+                    .try_into()?;
+
+                let value: i32 = number.into();
 
                 let material = match left.split(' ').last() {
                     Some(m) => m,
@@ -62,21 +65,21 @@ impl NumericSystem {
             None => return Err("I have no idea what you are talking about".to_string()),
         };
 
-        let amount: i32 = right
+        let number: RomanNumber = right
             .split(' ')
             // Right side can contain a material which we do not want for computing the amount
             .filter(|s| !self.materials.keys().any(|k| k == s))
             // Map the strings to the desired Roman numerals
-            .map(|s| -> Result<&RomanNumeral, String> {
+            .map(|s| -> Result<RomanNumeral, String> {
                 self.numerals
                     .get(s)
                     .ok_or(format!("Unknown intergalactic numeral {s}"))
+                    .cloned()
             })
-            .collect::<Result<Vec<&RomanNumeral>, String>>()?
-            // Collect into a i32 via impl From<Iterator<Item = RomanNumeral>> for i32
-            .into_iter()
-            .cloned()
-            .collect();
+            .collect::<Result<Vec<RomanNumeral>, String>>()?
+            .try_into()?;
+
+        let amount: i32 = number.into();
 
         // The last segment might be a material
         let last = right.split(' ').last().unwrap_or_default();
