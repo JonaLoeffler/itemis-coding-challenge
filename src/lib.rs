@@ -34,21 +34,24 @@ impl NumericSystem {
                     .collect::<Vec<RomanNumeral>>()
                     .try_into()?;
 
-                let value: i32 = number.into();
+                let value: f32 = Into::<i32>::into(number) as f32;
 
                 let material = match left.split(' ').last() {
                     Some(m) => m,
                     None => return Err("Empty left side".to_string()),
                 };
 
-                split = right.split(" ");
+                let next = right
+                    .split(" ")
+                    .next()
+                    .ok_or(format!("Expected a credit amount in {right}"))?;
 
-                if let Some(creditamount) = split.next() {
-                    if let Ok(amount) = creditamount.parse::<i32>() {
-                        self.materials
-                            .insert(material.to_string(), amount as f32 / value as f32);
-                    }
-                }
+                let amount = match next.parse::<i32>() {
+                    Ok(amount) => amount,
+                    Err(e) => return Err(format!("Unable to parse integer {next}: {e}")),
+                } as f32;
+
+                self.materials.insert(material.to_string(), amount / value);
             }
         } else {
             return Err(format!(
