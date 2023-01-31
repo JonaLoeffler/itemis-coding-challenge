@@ -3,5 +3,5 @@
 version = 3
 
 [[package]]
-name = "itemis-coding-challenge"
+name = "itemis"
 version = "0.1.0"
